@@ -255,13 +255,17 @@ class GPIODController:
                     )
 
                 self._lines[pin_name] = line
-                self._pins[pin_name] = GPIOPin(
+                pin = GPIOPin(
                     name=pin_name,
                     gpio_number=offset,
                     direction=direction.value,
-                    value=initial,            # State is int
+                    value=initial,
                     enabled=True,
                 )
+                # Inject live callbacks (default-arg captures pin_name per iteration)
+                pin._setter = lambda v, _n=pin_name: self.set_value(_n, v)
+                pin._getter = lambda _n=pin_name: self.get_value(_n)
+                self._pins[pin_name] = pin
                 print(
                     f"[GPIODController]   Configured '{pin_name}' "
                     f"offset={offset} dir={direction.value}"
@@ -304,13 +308,17 @@ class GPIODController:
                 )
 
                 self._lines[pin_name] = request
-                self._pins[pin_name] = GPIOPin(
+                pin = GPIOPin(
                     name=pin_name,
                     gpio_number=offset,
                     direction=direction.value,
-                    value=initial,            # State is int
+                    value=initial,
                     enabled=True,
                 )
+                # Inject live callbacks (default-arg captures pin_name per iteration)
+                pin._setter = lambda v, _n=pin_name: self.set_value(_n, v)
+                pin._getter = lambda _n=pin_name: self.get_value(_n)
+                self._pins[pin_name] = pin
                 print(
                     f"[GPIODController]   Configured '{pin_name}' "
                     f"offset={offset} dir={direction.value}"
@@ -331,8 +339,15 @@ class GPIODController:
 
     def get_pin(self, pin_name: str) -> GPIOPin:
         """
-        Return the :class:~gpio_classes.gpio_dataclasses.GPIOPin metadata
-        for *pin_name* (reflects the last known state).
+        Return the :class:`GPIOPin` for *pin_name*, with live
+        ``.set()`` / ``.get()`` / ``.toggle()`` callbacks already injected::
+
+            led = controller.get_pin("LED1")
+            led.set(1)            # drive HIGH
+            led.set(State.HIGH)   # same
+            state = led.get()     # State.HIGH / State.LOW
+            led.toggle()
+            print(led.value)      # 0 or 1, synced automatically
 
         Raises:
             KeyError: If *pin_name* has not been configured.
@@ -342,7 +357,7 @@ class GPIODController:
         return self._pins[pin_name]
 
     def get_all_pins(self) -> dict[str, GPIOPin]:
-        """Return a shallow copy of all configured :class:GPIOPin objects."""
+        """Return all configured :class:`GPIOPin` objects (with live callbacks)."""
         return dict(self._pins)
 
     def set_value(self, pin_name: str, value: "int | State"):
@@ -490,12 +505,26 @@ if __name__ == "__main__":
     }
     controller = GPIODController(gpio_config=gpio_config)
 
-    # Test output pin
-    print(f"Initial state of LED1: {controller.get_value('LED1')}")
+    # --- Via controller (original API) ---
+    print(f"Initial state of LED1 : {controller.get_value('LED1')}")
     controller.set_value("LED1", 1)
-    print(f"State of LED1 after setting to HIGH: {controller.get_value('LED1')}")
+    print(f"LED1 after set HIGH   : {controller.get_value('LED1')}")
     controller.toggle("LED1")
-    print(f"State of LED1 after toggle: {controller.get_value('LED1')}")
+    print(f"LED1 after toggle     : {controller.get_value('LED1')}")
 
-    ## read the value from the button
-    print(f"State of BUTTON1: {controller.get_value('BUTTON1')}")
+    # --- Via GPIOPin (pin-level API) ---
+    led1 = controller.get_pin("LED1")
+    print(f"\nled1 object           : {led1}")
+    led1.set(State.HIGH)
+    print(f"LED1 after led1.set(State.HIGH): {led1.get()}")
+    led1.toggle()
+    print(f"LED1 after led1.toggle()       : {led1.get()}")
+    print(f"led1.value (synced)            : {led1.value}")
+
+    # Iterate all pins
+    for name, pin in controller.get_all_pins().items():
+        print(f"{name}: GPIO{pin.gpio_number} dir={pin.direction} value={pin.value}")
+
+    # Read input pin via pin object
+    btn = controller.get_pin("BUTTON1")
+    print(f"\nBUTTON1 state: {btn.get()}  (int: {int(btn.get())})")
