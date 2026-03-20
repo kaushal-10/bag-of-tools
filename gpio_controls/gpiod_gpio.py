@@ -24,7 +24,13 @@ import traceback
 
 import gpiod
 
-from gpio_classes.gpio_dataclasses import GPIOPin, Direction, State, GPIOMode, Pi5GPIOToHeadMap, Pi5HeadToGPIOMap
+from gpio_classes.gpio_dataclasses import (
+    GPIOPin, Direction, State, GPIOMode,
+    Pi5GPIOToHeadMap, Pi5HeadToGPIOMap,
+    parse_pin_offset as _parse_pin_offset_base,
+    parse_direction as _parse_direction,
+    parse_state as _parse_state,
+)
 
 # ---------------------------------------------------------------------------
 # Version detection
@@ -43,91 +49,8 @@ _GPIOD_V2 = _GPIOD_MAJOR >= 2
 # ---------------------------------------------------------------------------
 
 def _parse_pin_offset(pin) -> int:
-    """
-    Convert a pin identifier to an integer GPIO line offset.
-
-    Two addressing modes are supported:
-
-    GPIO mode -> use the BCM GPIO number directly:
-        "GPIO17", "gpio17"  →  offset 17
-
-    Header-pin mode -> physical pin number on the 40-pin header,
-    resolved to a GPIO offset via :data:Pi5HeadToGPIOMap:
-        "11", 11  →  Pi5HeadToGPIOMap[11]  →  offset 17
-
-    Raises:
-        ValueError: If a header pin number is not present in
-            Pi5HeadToGPIOMap class variable.
-        TypeError: If the value cannot be interpreted as a pin.
-    """
-    if isinstance(pin, int):
-        # Bare int → header pin number
-        if pin not in Pi5HeadToGPIOMap:
-            raise ValueError(
-                f"Header pin {pin} is not a GPIO-capable pin. "
-                f"Valid header pins: {sorted(Pi5HeadToGPIOMap.keys())}"
-            )
-        return Pi5HeadToGPIOMap[pin]
-
-    pin_str = str(pin).strip()
-    upper = pin_str.upper()
-
-    if upper.startswith("GPIO"):
-        # e.g. "GPIO17" → direct GPIO offset
-        return int(upper[4:])
-
-    # Plain numeric string → header pin number
-    try:
-        header_pin = int(pin_str)
-    except ValueError:
-        raise TypeError(
-            f"Cannot interpret '{pin}' as a pin identifier. "
-            "Use 'GPIO<n>' for a direct GPIO offset or a plain integer for a header pin number."
-        )
-    if header_pin not in Pi5HeadToGPIOMap:
-        raise ValueError(
-            f"Header pin {header_pin} is not a GPIO-capable pin. "
-            f"Valid header pins: {sorted(Pi5HeadToGPIOMap.keys())}"
-        )
-    return Pi5HeadToGPIOMap[header_pin]
-
-
-def _parse_direction(raw) -> Direction:
-    """
-    Normalise any direction-like value to a :class:Direction enum member.
-
-    Accepted inputs:
-        - Direction.IN / Direction.OUT  (pass-through)
-        - "input"  / "in"   -> Direction.IN
-        - "output" / "out"  -> Direction.OUT
-    """
-    if isinstance(raw, Direction):
-        return raw
-    s = str(raw).strip().lower()
-    if s in ("input", "in"):
-        return Direction.IN
-    if s in ("output", "out"):
-        return Direction.OUT
-    raise ValueError(
-        f"Invalid direction '{raw}'. Must be one of: 'input', 'in', 'output', 'out'."
-    )
-
-
-def _parse_state(raw) -> State:
-    """
-    Normalise any state-like value to a :class:State enum member.
-
-    Accepted inputs:
-        - State.LOW / State.HIGH  (pass-through)
-        - 0 / falsy  -> State.LOW
-        - 1 / truthy -> State.HIGH
-
-    Because State is now (int, Enum), State(0) and State(1)
-    are used directly — no need for a separate .value extraction.
-    """
-    if isinstance(raw, State):
-        return raw
-    return State(1 if raw else 0)
+    """Resolve a pin identifier to a BCM GPIO offset using Pi5HeadToGPIOMap."""
+    return _parse_pin_offset_base(pin, Pi5HeadToGPIOMap)
 
 
 def _check_chip_available(chip_name: str) -> bool:
@@ -481,12 +404,32 @@ class GPIODController:
             f"gpiod_v{_GPIOD_MAJOR}, pins={pin_summary})"
         )
 
+def blink(controller: GPIODController, pin_name: str, times: int = 5, interval: float = 0.5):
+    """Example function to blink an output pin."""
+    for _ in range(times):
+        controller.toggle(pin_name)
+        time.sleep(interval)
+
+def monitor(controller: GPIODController, pin_name: str, duration: float = 10.0):
+    """Example function to monitor and print the state of an input pin."""
+    start_time = time.time()
+    if duration <= 0: #infinite monitoring if duration is 0 or negative
+        print(f"Monitoring '{pin_name}' indefinitely. Press Ctrl+C to stop.")
+        while True:
+            state = controller.get_value(pin_name)
+            print(f"{pin_name} state: {state}")
+            time.sleep(1.0)
+    else:
+        while time.time() - start_time < duration:
+            state = controller.get_value(pin_name)
+            print(f"{pin_name} state: {state}")
+            time.sleep(1.0)
     
 if __name__ == "__main__":
     # Example usage
     gpio_config = {
         "LED1": {
-            "pin": "GPIO17",   # direct BCM GPIO offset → line 17
+            "pin": "GPIO24",   # direct BCM GPIO offset → line 17
             "direction": "output",
             "initial": 0,
             "enabled": True,
@@ -498,7 +441,7 @@ if __name__ == "__main__":
             "enabled": True,
         },
         "BUTTON1": {
-            "pin": "GPIO27",
+            "pin": "GPIO23",
             "direction": "input",
             "enabled": True,
         },
@@ -509,6 +452,7 @@ if __name__ == "__main__":
     print(f"Initial state of LED1 : {controller.get_value('LED1')}")
     controller.set_value("LED1", 1)
     print(f"LED1 after set HIGH   : {controller.get_value('LED1')}")
+    time.sleep(5)
     controller.toggle("LED1")
     print(f"LED1 after toggle     : {controller.get_value('LED1')}")
 
@@ -528,3 +472,7 @@ if __name__ == "__main__":
     # Read input pin via pin object
     btn = controller.get_pin("BUTTON1")
     print(f"\nBUTTON1 state: {btn.get()}  (int: {int(btn.get())})")
+
+    blink(controller, "LED1", times=10, interval=1.0)
+
+    monitor(controller, "BUTTON1", duration=0)

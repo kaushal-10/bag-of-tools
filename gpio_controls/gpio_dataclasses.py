@@ -92,6 +92,85 @@ class State(int, Enum):
     HIGH = 1
 
 
+# ---------------------------------------------------------------------------
+# Shared pin-identifier / direction / state parsers
+# (used by all GPIO controller implementations)
+# ---------------------------------------------------------------------------
+
+def parse_pin_offset(pin, head_to_gpio_map: dict) -> int:
+    """
+    Convert a pin identifier to an integer GPIO line offset.
+
+    Two addressing modes:
+
+    * ``"GPIO17"`` / ``"gpio17"`` — BCM GPIO number used directly → ``17``
+    * ``"11"`` / ``11`` (int)     — physical 40-pin header number,
+      resolved via *head_to_gpio_map* (e.g. ``Pi5HeadToGPIOMap``)
+
+    Raises:
+        ValueError: Header pin not in *head_to_gpio_map*.
+        TypeError:  Value cannot be interpreted as a pin identifier.
+    """
+    if isinstance(pin, int):
+        if pin not in head_to_gpio_map:
+            raise ValueError(
+                f"Header pin {pin} is not a GPIO-capable pin. "
+                f"Valid header pins: {sorted(head_to_gpio_map.keys())}"
+            )
+        return head_to_gpio_map[pin]
+
+    pin_str = str(pin).strip()
+    upper = pin_str.upper()
+    if upper.startswith("GPIO"):
+        return int(upper[4:])
+
+    try:
+        header_pin = int(pin_str)
+    except ValueError:
+        raise TypeError(
+            f"Cannot interpret '{pin}' as a pin identifier. "
+            "Use 'GPIO<n>' for a direct GPIO offset or a plain integer for a header pin number."
+        )
+    if header_pin not in head_to_gpio_map:
+        raise ValueError(
+            f"Header pin {header_pin} is not a GPIO-capable pin. "
+            f"Valid header pins: {sorted(head_to_gpio_map.keys())}"
+        )
+    return head_to_gpio_map[header_pin]
+
+
+def parse_direction(raw) -> Direction:
+    """
+    Normalise any direction-like value to a :class:`Direction` enum member.
+
+    Accepted: ``Direction.IN/OUT`` (pass-through), ``"input"/"in"`` → IN,
+    ``"output"/"out"`` → OUT.
+    """
+    if isinstance(raw, Direction):
+        return raw
+    s = str(raw).strip().lower()
+    if s in ("input", "in"):
+        return Direction.IN
+    if s in ("output", "out"):
+        return Direction.OUT
+    raise ValueError(
+        f"Invalid direction '{raw}'. Must be one of: 'input', 'in', 'output', 'out'."
+    )
+
+
+def parse_state(raw) -> State:
+    """
+    Normalise any state-like value to a :class:`State` enum member.
+
+    Accepted: ``State.LOW/HIGH`` (pass-through), ``0``/falsy → LOW,
+    ``1``/truthy → HIGH.  Because ``State`` is ``(int, Enum)``, the
+    returned value can be used directly wherever an ``int`` is expected.
+    """
+    if isinstance(raw, State):
+        return raw
+    return State(1 if raw else 0)
+
+
 class GPIOMode(str, Enum):
     EXTERNAL = "external"
     GPIOD = "gpiod"
@@ -161,3 +240,16 @@ Pi5HeadToGPIOMap = {
     40 : 21
 
 }
+
+
+
+class JNanoGPIOToHeadMap:
+    pass
+
+
+class JONanoJP5GPIOToHeadMap:
+    pass
+
+class JONanoJP6GPIOToHeadMap:
+    pass
+
