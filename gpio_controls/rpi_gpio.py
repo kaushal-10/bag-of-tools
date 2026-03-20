@@ -104,7 +104,7 @@ class RPiGPIOController:
                 f"Original error: {e}"
             ) from e
 
-        print("[RPiGPIOController] Initialised RPi.GPIO in BCM mode.")
+        print("[RPiGPIOController] Initialised RPi.GPIO in BCM mode.")  
         self._initialize_pins()
 
     # ------------------------------------------------------------------

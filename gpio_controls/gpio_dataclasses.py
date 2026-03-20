@@ -243,13 +243,42 @@ Pi5HeadToGPIOMap = {
 
 
 
-class JNanoGPIOToHeadMap:
-    pass
+# ---------------------------------------------------------------------------
+# Jetson Nano (JetPack 4.x / L4T 32.x) — 40-pin header GPIO mappings
+# Source: NVIDIA Jetson Nano Developer Kit pinout documentation
+# ---------------------------------------------------------------------------
+
+JNanoHeadToGPIOMap = {
+    7: 216, 11: 50, 12: 79, 13: 14, 15: 194,
+    16: 232, 18: 15, 19: 16, 21: 17, 22: 13,
+    23: 18, 24: 19, 26: 20, 29: 149, 31: 200,
+    32: 168, 33: 38, 35: 76, 36: 51, 37: 12,
+    38: 77, 40: 78,
+}
+
+JNanoGPIOToHeadMap = {v: k for k, v in JNanoHeadToGPIOMap.items()}
 
 
-class JONanoJP5GPIOToHeadMap:
-    pass
+# ---------------------------------------------------------------------------
+# Jetson Orin Nano (JetPack 5.x / L4T 35.x)
+# Partial map — verified pins only (extend as needed).
+# ---------------------------------------------------------------------------
 
-class JONanoJP6GPIOToHeadMap:
-    pass
+JONanoJP5HeadToGPIOMap = {
+    7: 492, 12: 398, 29: 453, 31: 454,
+    33: 391, 35: 401, 38: 400, 40: 399,
+}
+
+JONanoJP5GPIOToHeadMap = {v: k for k, v in JONanoJP5HeadToGPIOMap.items()}
+
+
+# ---------------------------------------------------------------------------
+# Jetson Orin Nano (JetPack 6.x / L4T 36.x)
+# GPIO numbering changed from JP5 due to kernel pin-controller updates.
+# Populate with verified values for your specific board.
+# ---------------------------------------------------------------------------
+
+JONanoJP6HeadToGPIOMap: dict[int, int] = {}
+
+JONanoJP6GPIOToHeadMap: dict[int, int] = {}
 
